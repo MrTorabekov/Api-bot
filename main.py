@@ -6,6 +6,7 @@ import requests
 from config import TOKEN
 from aiogram import Bot, Dispatcher, types, F
 from langdetect import detect, DetectorFactory
+from langdetect.lang_detect_exception import LangDetectException
 from googletrans import Translator
 
 API_TOKEN = '7464878637:AAFi9RhbayeY7HX9wXIX8GvLMNGzBNh9SWM'
@@ -18,15 +19,11 @@ translator = Translator()
 
 
 def is_uzbek(text):
-    # O'zbek lotin va kirill alifbosidagi harflar
-    uzbek_latin_chars = "aAbBcCdDeEfFgGhHiIjJkKlLmMnNoOpPqQrRsStTuUvVwWxXyYzZʻʻʼʼ"
-    uzbek_cyrillic_chars = "АаБбВвГгДдЕеЁёЖжЗзИиЙйКкЛлМмНнОоПпРрСсТтУуЎўФфХхЦцЧчШшЪъЭэЮюЯя"
-
-    # Har bir harfni tekshirish
-    for char in text:
-        if char in uzbek_latin_chars or char in uzbek_cyrillic_chars:
-            return True
-    return False
+    try:
+        lang = detect(text)
+        return lang == 'uz'
+    except LangDetectException:
+        return False
 
 @dp.message(Command('start'))
 async def send_welcome(message: types.Message):
@@ -40,16 +37,20 @@ async def translate_text(message: types.Message):
             # O'zbekchadan Inglizchaga
             uz_en_url = f"http://127.0.0.1:8000/uz_en/{text}"
             response = requests.get(uz_en_url)
+            response.raise_for_status()  # Bu qator HTTP xatoliklarini aniqlash uchun
             result = response.json()["ENG"]
             await message.answer(result)
         else:
             # Inglizchadan O'zbekchaga
             en_uz_url = f"http://127.0.0.1:8000/en_uz/{text}"
             response = requests.get(en_uz_url)
+            response.raise_for_status()  # Bu qator HTTP xatoliklarini aniqlash uchun
             result = response.json()["UZ"]
             await message.answer(result)
-    except Exception as e:
+    except requests.exceptions.RequestException as e:
         await message.reply(f"Tarjima qilishda xatolik yuz berdi: {e}")
+    except KeyError:
+        await message.reply("Tarjima qilishda xatolik yuz berdi: Kutilmagan javob formati.")
 
 
 async def main() -> None:
